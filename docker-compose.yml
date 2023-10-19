@@ -1,0 +1,108 @@
+version: "3.8"
+
+services:
+
+  build-server:
+    container_name: ${BUILD_SERVER_NAME:-woodpecker-server}
+    image: ${BUILD_SERVER_IMAGE:-docker.io/woodpeckerci/woodpecker-server:latest}
+    restart: unless-stopped
+    depends_on:
+      - build-daemon
+    networks:
+      woodpecker_frontend:
+        ipv4_address: ${BUILD_SERVER_FRONTEND_IP:-10.88.0.61}
+      woodpecker_backend:
+        ipv4_address: ${BUILD_SERVER_BACKEND_IP:-10.89.61.60}
+    ports:
+      - ${BUILD_SERVER_FRONTEND_PORT:-8000}:8000
+    volumes:
+      - ${BUILD_SERVER_VOLUMES_DATA:-./wp.data.d}:/var/lib/woodpecker${BUILD_SERVER_VOLUMES_DATA_OPT:-:rw}
+      - ${BUILD_SERVER_VOLUMES_DB:-./wp.db.d}:/var/lib/woodpecker${BUILD_SERVER_VOLUMES_DB_OPT:-:rw}
+    env_file:
+      - ./woodpecker.env
+    #secrets:
+    #  - github_secret
+    #  - gitlab_secret
+    #  - gitea_secret
+    environment:
+      - WOODPECKER_OPEN=${BUILD_SERVER_OPEN:-true}
+      - WOODPECKER_HOST=${BUILD_SERVER_HOST}
+      - WOODPECKER_ADMIN=${BUILD_SERVER_ADMIN:-}
+      - WOODPECKER_ORGS=${BUILD_SERVER_ORGS:-}
+      - WOODPECKER_REPO_OWNERS=${BUILD_SERVER_REPO_OWNERS:-}
+      - WOODPECKER_AGENT_SECRET=${BUILD_SERVER_AGENT_SECRET}
+      - WOODPECKER_BACKEND=docker
+      - DOCKER_HOST=tcp://${}:2375
+    ### GITHUB ###  
+      - WOODPECKER_GITHUB=${GITHUB:-false}
+      - WOODPECKER_GITHUB_URL=${GITHUB_URL:-example.com}
+    # - WOODPECKER_GITHUB_CLIENT=${GITHUB_CLIENT}
+    # - WOODPECKER_GITHUB_SECRET=${GITHUB_SECRET} or /run/secrets/github_secret
+      - WOODPECKER_GITHUB_CLIENT_FILE=${GITHUB_CLIENT_FILE:-./.github_client}}
+      - WOODPECKER_GITHUB_SECRET_FILE=${GITHUB_SECRET_FILE:-./.github_secret}
+      - WOODPECKER_GITHUB_SKIP_VERIFY=${GITHUB_SKIP_VERIFY:-false}
+    ### GITLAB ###  
+      - WOODPECKER_GITLAB=${GITLAB:-false}
+      - WOODPECKER_GITLAB_URL=${GITLAB_URL:-example.com}
+    # - WOODPECKER_GITLAB_CLIENT=${GITLAB_CLIENT}
+    # - WOODPECKER_GITLAB_SECRET=${GITLAB_SECRET} or /run/secrets/gitlab_secret
+      - WOODPECKER_GITLAB_CLIENT_FILE=${GITLAB_CLIENT_FILE:-./.gitlab_client}
+      - WOODPECKER_GITLAB_SECRET_FILE=${GITLAB_SECRET_FILE:-./.gitlab_secret}
+      - WOODPECKER_GITLAB_SKIP_VERIFY=${GITLAB_SKIP_VERIFY:-false}
+    ### GITEA ###  
+      - WOODPECKER_GITEA=${GITEA:-false}
+      - WOODPECKER_GITEA_URL=${github_secretGITEA_URL:-example.com}
+    # - WOODPECKER_GITEA_CLIENT=${GITEA_CLIENT}
+    # - WOODPECKER_GITEA_SECRET=${GITEA_SECRET} or /run/secrets/gitea_secret
+      - WOODPECKER_GITEA_CLIENT_FILE=${GITEA_CLIENT_FILE:-./.gitea_client}
+      - WOODPECKER_GITEA_SECRET_FILE=${GITEA_SECRET_FILE:-./.gitea_secret}
+      - WOODPECKER_GITEA_SKIP_VERIFY=${GITEA_SKIP_VERIFY:-false}
+
+      
+  build-agent:
+    container_name: ${BUILD_AGENT_NAME:-woodpecker-agent}
+    image: ${BUILD_AGENT_IMAGE:-docker.io/woodpeckerci/woodpecker-agent:latest}
+    restart: unless-stopped
+    depends_on:
+      - build-server
+    networks:
+      woodpecker_backend:
+        ipv4_address: ${BUILD_AGENT_IP:-10.89.61.61}
+    volumes:
+      - ${BUILD_AGENT_VOLUMES_DATA:-./wp.agent.d}:/etc/woodpecker${BUILD_AGENT_VOLUMES_DATA_OPT:-:Z}
+    env_file:
+      - ./woodpecker.env
+    environment:
+      - WOODPECKER_SERVER=${BUILD_SERVER_BACKEND_IP:-10.89.61.60}:9000
+      - WOODPECKER_AGENT_SECRET=${BUILD_SERVER_AGENT_SECRET}
+      
+      
+  build-daemon:
+    container_name: ${BUILD_CONTAINER_DAEMON_NAME:-woodpecker-container-daemon}
+    image: ${BUILD_CONTAINER_DAEMON_IMAGE:-docker.io/docker/dind:24.0}
+    privileged: true
+    restart: unless-stopped
+    networks:
+      woodpecker_backend:
+        ipv4_address: ${BUILD_CONTAINER_DAEMON_IP:-10.89.61.69}
+
+secrets:
+  github_secret:
+    file: ./.github-secret
+  gitlab_secret:
+    file: ./.gitlab-secret
+  gitea_secret:
+    file: ./.gitea-secret
+
+
+networks:
+  woodpecker_frontend:
+    name: ${NETWORK_NAME:-proxy}
+    external: true
+  woodpecker_backend:
+    name: ${BUILD_BACKEND_NETWORK_NAME:-woodpecker_backend}
+    ipam:
+      config:
+        - subnet: ${BUILD_BACKEND_NETWORK_SUBNET:-10.89.61.0/24}
+        - gateway: ${BUILD_BACKEND_NETWORK_GATEWAY:-10.89.61.1}
+  
