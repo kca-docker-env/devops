@@ -5,6 +5,8 @@ services:
   build-server:
     container_name: ${BUILD_SERVER_NAME:-woodpecker-server}
     image: ${BUILD_SERVER_IMAGE:-docker.io/woodpeckerci/woodpecker-server:latest}
+    mem_limit: "512m"
+    mem_reservation: "64m"
     restart: unless-stopped
     depends_on:
       - build-daemon
@@ -57,11 +59,15 @@ services:
       - WOODPECKER_GITEA_CLIENT_FILE=${GITEA_CLIENT_FILE:-./.gitea_client}
       - WOODPECKER_GITEA_SECRET_FILE=${GITEA_SECRET_FILE:-./.gitea_secret}
       - WOODPECKER_GITEA_SKIP_VERIFY=${GITEA_SKIP_VERIFY:-false}
+    labels:
+      - "io.containers.autoupdate=registry"
 
       
   build-agent:
     container_name: ${BUILD_AGENT_NAME:-woodpecker-agent}
     image: ${BUILD_AGENT_IMAGE:-docker.io/woodpeckerci/woodpecker-agent:latest}
+    mem_limit: "512m"
+    mem_reservation: "64m"
     restart: unless-stopped
     depends_on:
       - build-server
@@ -75,24 +81,27 @@ services:
     environment:
       - WOODPECKER_SERVER=${BUILD_SERVER_BACKEND_IP:-10.89.61.60}:9000
       - WOODPECKER_AGENT_SECRET=${BUILD_SERVER_AGENT_SECRET}
+    labels:
+      - "io.containers.autoupdate=registry"
       
       
   build-daemon:
     container_name: ${BUILD_CONTAINER_DAEMON_NAME:-woodpecker-container-daemon}
     image: ${BUILD_CONTAINER_DAEMON_IMAGE:-docker.io/docker/dind:24.0}
+    mem_limit: "10g"
+    mem_reservation: "128m"
     privileged: true
     restart: unless-stopped
     networks:
       woodpecker_backend:
         ipv4_address: ${BUILD_CONTAINER_DAEMON_IP:-10.89.61.69}
-
-secrets:
-  github_secret:
-    file: ./.github-secret
-  gitlab_secret:
-    file: ./.gitlab-secret
-  gitea_secret:
-    file: ./.gitea-secret
+    expose:
+      - 2375
+    environment:
+      - DOCKER_TLS_VERIFY=false
+      - DOCKER_TLS_CERTDIR=
+    labels:
+      - "io.containers.autoupdate=registry"
 
 
 networks:
@@ -106,3 +115,11 @@ networks:
         - subnet: ${BUILD_BACKEND_NETWORK_SUBNET:-10.89.61.0/24}
         - gateway: ${BUILD_BACKEND_NETWORK_GATEWAY:-10.89.61.1}
   
+
+#secrets:
+#  github_secret:
+#    file: ./.github-secret
+#  gitlab_secret:
+#    file: ./.gitlab-secret
+#  gitea_secret:
+#    file: ./.gitea-secret
